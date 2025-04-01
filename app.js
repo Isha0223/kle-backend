@@ -14,7 +14,7 @@ app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json());
 
-DJxfoTPqJaEs7MJ
+
 let MONGODB_URL ='mongodb+srv://<ishamalu02>:<DJxfoTPqJaEs7MJ>@cluster0.r6ugeia.mongodb.net/?retryWrites=true&w=majority'
 mongoose.connect(MONGODB_URL)
 .then(()=>{
