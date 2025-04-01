@@ -14,32 +14,41 @@ app.use(cors());
 app.use(morgan('dev'));
 app.use(express.json());
 
-mongoose.connect('mongodb://127.0.0.1:27017/kleecom')
+DJxfoTPqJaEs7MJ
+let MONGODB_URL ='mongodb+srv://<ishamalu02>:<DJxfoTPqJaEs7MJ>@cluster0.r6ugeia.mongodb.net/?retryWrites=true&w=majority'
+mongoose.connect(MONGODB_URL)
 .then(()=>{
     console.log('db connected');
 }).catch((err)=>{
     console.log('db is not connected',err); 
 })
 
-//task-1 create a route for register user
+//task-1 -> create a register route
 app.post('/register',async(req,res)=>{
     try{
-        let {email,name,password} = req.body;
-        if(!email || !name ||!password){
-            return res.status(400).json({message:"Some fields are Missing"})
+
+        const {name,email,password} = req.body;
+        //check is any  field missing
+        if(!name || !email || !password){
+            return res.status(400).json({message:'Some fields are Missing'});
         }
-        let isUserAlreadyExist = await User.findOne({email});
-        if(isUserAlreadyExist){
-            return res.status(400).json({message:"User already has a account"});
+
+        //check if user already exists
+        const isUserAlreadyExists = await User.findOne({email});
+        if(isUserAlreadyExists){
+            return res.status(400).json({
+                message:'User already exists'
+            })
         }else{
-            //hash the password
-            const salt = bcrypt.genSaltSync(10);
-            const hashedPassword = bcrypt.hashSync(password,salt);
 
-            //token
-            const token = jwt.sign({email},"supersecret",
-                {expiresIn:'365d'});
+            //hashing the password
+            const salt = await bcrypt.genSaltSync(10);
+            const hashedPassword = await bcrypt.hashSync(password,salt);
 
+            //jwt token
+            const token = jwt.sign({email},'supersecret',{expiresIn:'365d'});
+
+            //creating new user
             await User.create({
                 name,
                 email,
@@ -47,252 +56,287 @@ app.post('/register',async(req,res)=>{
                 token,
                 role:'user'
             })
-        return res.status(201).json({message:"User created Successfully"})
+            return res.status(201).json({message:'User created successfully'});
         }
+        
+
     }catch(error){
         console.log(error);
-        res.status(500).json({message:"Inernal server Error"})
+        return res.status(500).json({message:'Internal server error'})
     }
 })
 
-
-//task-2 create a route for login user
+//task-2 -> create a login route
 app.post('/login',async(req,res)=>{
     try{
-        let {email,password} = req.body;
+        const {email, password} = req.body;
 
+        //check if any field is missing
         if(!email || !password){
-            return res.status(400).json({message:"Email and password are required"})
+            return res.status(400).json({message:'Some fields are missing'});
         }
+    
+        //user exists or not
         const user = await User.findOne({email});
         if(!user){
-            return res.status(400).json({message:"User is not registered, Please create Account"})
+            return res.status(400).json({message:'User does not exists.Please register first'});
         }
-        //check password
-        const isPasswordMatched = bcrypt.compareSync(password,user.password);
 
+        //compare the entered password with the hashed password
+        const isPasswordMatched = await bcrypt.compareSync(password,user.password);
         if(!isPasswordMatched){
-            return res.status(400).json({message:"invalid Password"})
+            return res.status(400).json({message:"Password is incorrect"});
         }
 
-        //successful login
+        //succesfully logged in
         return res.status(200).json({
+            message:'user logged in successfully',
             id:user._id,
             name:user.name,
-            token: user.token,
-            email: user.email,
+            email:user.email,
+            token:user.token,
             role:user.role
-        })
-
-
+        });
     }catch(error){
         console.log(error);
-        res.status(500).json({message:"Inernal server Error"})
+        return res.status(500).json({message:'Internal server error'})
     }
 })
 
-//task-3 -> create route see all the product
+//task-3 -> create a route to see all products
 app.get('/products',async(req,res)=>{
     try{
-        const products = await Product.find();
-        res.status(200).json({
-            message:"Product found successfully",
-            products:products
-        })
-
+       const products = await Product.find({});
+       return res.status(200).json({
+        message:"find all the products",
+        products:products
+       }); 
     }catch(error){
         console.log(error);
-        res.status(500).json({message:"Inernal server Error"})
+        return res.status(500).json({message:'Internal server error'})
     }
 })
 
-//task-4-> create a route to add product
+//task-4 -> create a route to add a product
 app.post('/add-product',async(req,res)=>{
     try{
-
-        const {name, image, price, description,stock,brand} = req.body;
+        const{name, price, image, brand, stock, description} = req.body;
         const {token} = req.headers;
-        const decodedtoken = jwt.verify(token,"supersecret");
-        const user = await User.findOne({email:decodedtoken.email});
-        const product = await Product.create({
+
+        const decodedToken = jwt.verify(token,'supersecret');
+        const user = await User.findOne({email:decodedToken.email});
+
+        await Product.create({
             name,
+            price,
             description,
             image,
-            price, 
             stock,
             brand,
             user:user._id
-        })
+        });
         return res.status(201).json({
-            message:"Product created successfully",
-            product:product
-        })
-
+            message:'Product added successfully',
+        });
     }catch(error){
         console.log(error);
-        res.status(500).json({message:"Inernal server Error"})
+        return res.status(500).json({message:'Internal server error'})
     }
 })
 
-
-//task5 -> to show the particular product
-app.get('/product/:id', async(req,res)=>{
+//task-5 create route to see the particular product
+app.get('/product/:id',async(req,res)=>{
     try{
         const {id} = req.params;
-        if(!id){
-            res.status(400).json({message:"Product Id not found"});
-        }
+         if(!id){
+            return res.status(400).json({message:'Product is missing'});
+         }
 
-        const {token} = req.headers;
-
-        const userEmailFromToken = jwt.verify(token,"supersecret");
-        if(userEmailFromToken.email){
+         const {token}  = req.headers;
+         const userEmailFromToken = jwt.verify(token,'supersecret');
+         if(userEmailFromToken.email){
             const product = await Product.findById(id);
 
             if(!product){
-                res.status(400).json({message:"Product not found"});
+                return res.status(400).json({message:' Product not found '})
             }
 
-            res.status(200).json({message:"success",product});
-        }
-
+            return res.status(200).json({message:"success",product});
+         };
     }catch(error){
         console.log(error);
-        res.status(500).json({message:"Internal server error"});
+        return res.status(500).json({message:'Internal server error'})
     }
 })
 
-//task-6 update a product
-app.patch('/product/edit/:id',async(req,res)=>{
- const {id} = req.params;
- const {token} = req.headers;
- const {name, image, price, stock, brand, description} = req.body.productData;
- const decodedtoken = jwt.verify(token, "supersecret");
- try{
-    if(decodedtoken.email){
-        const updatedProduct = await Product.findByIdAndUpdate(id,{
-           name,
-           description,
-           image,
-           price,
-           brand,
-           stock 
-        })
-        return res.status(200).json({
-            message:"product updated successfully",
-            product: updatedProduct
-        })
+//task-6 -> create route to update product
+app.patch("/product/edit/:id", async (req, res) => {
+    const { id } = req.params;
+    const { token } = req.headers;
+    const body = req.body.productData;
+    const name = body.name;
+    const description = body.description;
+    const image = body.image;
+    const price = body.price;
+    const brand = body.brand;
+    const stock = body.stock;
+    const userEmail = jwt.verify(token, "supersecret");
+    try {
+      console.log({
+        name,
+        description,
+        image,
+        price,
+        brand,
+        stock,
+      });
+      if (userEmail.email) {
+        const updatedProduct = await Product.findByIdAndUpdate(id, {
+          name,
+          description,
+          image,
+          price,
+          brand,
+          stock,
+        });
+        res.status(200).json({ message: "Product Updated Succesfully" });
+      }
+    } catch (error) {
+      res.status(400).json({
+        message: "Internal Server Error Occured While Updating Product",
+      });
     }
- }catch(error){
-        console.log(error);
-        res.status(500).json({message:"Inernal server Error"})
-    }
-})
+  });
 
-//task-7 delete the product
-app.delete('/product/delete/:id',async(req,res)=>{
-    const {id}  = req.params;
+
+  //task-7 -> create route to delete product
+  app.delete('/product/delete/:id',async(req,res)=>{
+    const {id} = req.params;
     if(!id){
-        return res.status(400).json({message:"Product id not found"});
+        return res.status(400).json({message:"product id not found"})
+
     }
     try{
-        const deletedProduct = await Product.findByIdAndDelete(id);
-
-        if(!deletedProduct){
-            return res.status(404).json({message:"Product not found"})
+        const deleteProduct = await Product.findByIdAndDelete(id);
+        if(!deleteProduct){
+            res.status(404).json({message:"product not found"});
         }
 
-        return res.status(500).json({
-            message:"Product deleted succcessfuly",
-            product: deletedProduct
+        res.status(200).json({message:"product deleted successfully",
+            product:deleteProduct
         })
 
-    }catch(error){
-        console.log(error);
-        res.status(500).json({message:"Inernal server Error"})
+    }catch (error) {
+      res.status(400).json({
+        message: "Internal Server Error Occured While Updating Product",
+      });
     }
 })
 
-//task-8 -> create route to see all product in cart
+
+//task-8 -> search product
+app.get('/product/search/:keyword',async(req,res)=>{
+    const {keyword} = req.params;
+    try{
+      const products = await Product.find({
+        name:{$regex:keyword, $options:"i"}
+      });
+  
+      if(products.length === 0){
+        return  res.status(404).json({message:"No Product Found"});
+      }
+  
+      res.status(200).json({
+        message:"Products found",
+        products:products
+      });
+    }catch(error){
+      console.log(error);
+      res.status(500).json({message:"error searching products",error});
+    }
+  })
+  
+
+//task-9 create route for cart
 app.get('/cart',async(req,res)=>{
     const {token} = req.headers;
-    const decodedtoken = jwt.verify(token, "supersecret");
-    const user = await User.findOne({email:decodedtoken.email}).populate({
-        path:'cart',
+    const decodedToken = jwt.verify(token,"supersecret");
+    const user = await User.findOne({email: decodedToken.email}).populate({
+        path:"cart",
         populate:{
             path:'products',
-            model:'Product'
-        }   
+            model: 'Product'
+        }
     })
     if(!user){
-        return res.status(400).json({message:"User not found"})
+        return res.status(200).json({message:"User not found"});
     }
 
-    return res.status(200).json({
-        message:"user found",
-        cart:user.cart
-    })
-})
+    return res.status(200).json({cart:user.cart});
+})  
 
-//task-9 -> create route to add product in cart
-app.post('/cart/add',async(req,res)=>{
+// taks-10-> add product in cart
+app.post("/cart/add", async (req, res) => {
     const body = req.body;
-    const productArray = body.products;
+  
+    const productsArray = body.products;
     let totalPrice = 0;
-    try{
-        for(const item of productArray){
-            const product = await Product.findById(item);
-
-            if(product){
-                totalPrice += product.price;
-            }
+  
+    try {
+      for (const item of productsArray) {
+        const product = await Product.findById(item);
+        if (product) {
+          totalPrice += product.price;
         }
-
-        const {token} = req.headers;
-        const decodedtoken = jwt.verify(token, "supersecret");
-        const user = await User.findOne({email:decodedtoken.email});
-
-        if(!user){
-            res.status(404).json({message:"User not found"});
-        }
-        let cart;
-        if(user.cart){
-            cart = await Cart.findById(user.cart).populate("products");
-            const existingProductIds = cart.products.map((product)=>{
-                product._id.toString()
-            })
-
-            productArray.forEach(async(productId)=>{
-                if(!existingProductIds.includes(productId)){
-                    cart.products.push(productId);
-
-                    const product = await Product.findById(productId);
-                    totalPrice += product.price;
-                }
-            })
-            cart.total = totalPrice;
-            await cart.save();
-        }else{
-            cart = new Cart({
-              products: productArray,
-              total:totalPrice  
-            });
-            await cart.save();
-            user.cart = cart._id;
-            await user.save();
-        }
-        res.status(201).json({message:"cart updated succcesfully",
-            cart:cart
-        })
-
-    }catch(error){
-        console.log(error);
-        res.status(500).json({message:"Inernal server Error"})
+      }
+  
+      const { token } = req.headers;
+      const decodedToken = jwt.verify(token, "supersecret");
+      const user = await User.findOne({ email: decodedToken.email });
+  
+      if (!user) {
+        return res.status(404).json({ message: "User Not Found" });
+      }
+  
+      let cart;
+      if (user.cart) {
+        cart = await Cart.findById(user.cart).populate("products");
+        const existingProductIds = cart.products.map((product) =>
+          product._id.toString()
+        );
+  
+        productsArray.forEach(async (productId) => {
+          if (!existingProductIds.includes(productId)) {
+            cart.products.push(productId);
+            const product = await Product.findById(productId);
+            totalPrice += product.price;
+          }
+        });
+  
+        cart.total = totalPrice;
+        await cart.save();
+      } else {
+        cart = new Cart({
+          products: productsArray,
+          total: totalPrice,
+        });
+  
+        await cart.save();
+        user.cart = cart._id;
+        await user.save();
+      }
+  
+      res.status(201).json({
+        message: "Cart Updated Successfully",
+        cart: cart,
+      });
+    } catch (error) {
+      res.status(500).json({ message: "Error Adding to Cart", error });
     }
-})
-
-//task-10 ->  create route to delete product in cart
-app.delete("/cart/product/delete", async (req, res) => {
+  });
+  
+  //task-11 -> delete product from cart
+  app.delete("/cart/product/delete", async (req, res) => {
     const { productID } = req.body;
     const { token } = req.headers;
   
@@ -330,7 +374,7 @@ app.delete("/cart/product/delete", async (req, res) => {
         message: "Product Removed from Cart Successfully",
         cart: cart,
       });
-    } catch (error) {
+    } catch(error) {
       res
         .status(500)
         .json({ message: "Error Removing Product from Cart", error });
